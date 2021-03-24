@@ -170,6 +170,7 @@ type FullNodeStruct struct {
 		ClientListDeals                           func(ctx context.Context) ([]api.DealInfo, error)                                                                 `perm:"write"`
 		ClientGetDealUpdates                      func(ctx context.Context) (<-chan api.DealInfo, error)                                                            `perm:"read"`
 		ClientRetrieve                            func(ctx context.Context, order api.RetrievalOrder, ref *api.FileRef) error                                       `perm:"admin"`
+		ClientCancelRetrievalDeal                 func(p0 context.Context, p1 retrievalmarket.DealID) error                                                         `perm:"write"`
 		ClientRetrieveWithEvents                  func(ctx context.Context, order api.RetrievalOrder, ref *api.FileRef) (<-chan marketevents.RetrievalEvent, error) `perm:"admin"`
 		ClientQueryAsk                            func(ctx context.Context, p peer.ID, miner address.Address) (*storagemarket.StorageAsk, error)                    `perm:"read"`
 		ClientDealPieceCID                        func(ctx context.Context, root cid.Cid) (api.DataCIDSize, error)                                                  `perm:"read"`
@@ -632,6 +633,10 @@ func (c *FullNodeStruct) ClientGetDealUpdates(ctx context.Context) (<-chan api.D
 
 func (c *FullNodeStruct) ClientRetrieve(ctx context.Context, order api.RetrievalOrder, ref *api.FileRef) error {
 	return c.Internal.ClientRetrieve(ctx, order, ref)
+}
+
+func (s *FullNodeStruct) ClientCancelRetrievalDeal(p0 context.Context, p1 retrievalmarket.DealID) error {
+	return s.Internal.ClientCancelRetrievalDeal(p0, p1)
 }
 
 func (c *FullNodeStruct) ClientRetrieveWithEvents(ctx context.Context, order api.RetrievalOrder, ref *api.FileRef) (<-chan marketevents.RetrievalEvent, error) {

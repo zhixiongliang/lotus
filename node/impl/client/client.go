@@ -190,6 +190,29 @@ func (a *API) ClientStartDeal(ctx context.Context, params *api.StartDealParams) 
 	return &result.ProposalCid, nil
 }
 
+func (a *API) ClientCancelRetrievalDeal(ctx context.Context, dealid retrievalmarket.DealID) error {
+	cerr := make(chan error)
+	go func() {
+		err := a.Retrieval.CancelDeal(dealid)
+
+		select {
+		case cerr <- err:
+		case <-ctx.Done():
+		}
+	}()
+
+	select {
+	case err := <-cerr:
+		if err != nil {
+			return xerrors.Errorf("canceling retrieval deal erred: %w", err)
+		}
+
+		return nil
+	case <-ctx.Done():
+		return xerrors.Errorf("canceling retrieval deal context timeout: %w", ctx.Err())
+	}
+}
+
 func (a *API) ClientListDeals(ctx context.Context) ([]api.DealInfo, error) {
 	deals, err := a.SMDealClient.ListLocalDeals(ctx)
 	if err != nil {

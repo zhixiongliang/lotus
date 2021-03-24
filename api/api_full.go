@@ -305,6 +305,8 @@ type FullNode interface {
 	// ClientMinerQueryOffer returns a QueryOffer for the specific miner and file.
 	ClientMinerQueryOffer(ctx context.Context, miner address.Address, root cid.Cid, piece *cid.Cid) (QueryOffer, error)
 	// ClientRetrieve initiates the retrieval of a file, as specified in the order.
+	// ClientCancelRetrievalDeal cancels an ongoing retrieval deal based on DealID
+	ClientCancelRetrievalDeal(ctx context.Context, dealid retrievalmarket.DealID) error //perm:write
 	ClientRetrieve(ctx context.Context, order RetrievalOrder, ref *FileRef) error
 	// ClientRetrieveWithEvents initiates the retrieval of a file, as specified in the order, and provides a channel
 	// of status updates.

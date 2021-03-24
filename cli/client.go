@@ -95,6 +95,32 @@ var clientCmd = &cli.Command{
 		WithCategory("util", clientListTransfers),
 		WithCategory("util", clientRestartTransfer),
 		WithCategory("util", clientCancelTransfer),
+		WithCategory("util", clientCancelRetrievalDeal),
+	},
+}
+var clientCancelRetrievalDeal = &cli.Command{
+	Name:  "cancel-retrieval-deal",
+	Usage: "Cancel a retrieval deal by DealID",
+	Flags: []cli.Flag{
+		&cli.Int64Flag{
+			Name:     "dealid",
+			Usage:    "specify retrieval deal by DealID",
+			Required: true,
+		},
+	},
+	Action: func(cctx *cli.Context) error {
+		api, closer, err := GetFullNodeAPI(cctx)
+		if err != nil {
+			return err
+		}
+		defer closer()
+		ctx := ReqContext(cctx)
+
+		if cctx.Int64("dealid") == 0 {
+			return errors.New("deal id cannot be 0")
+		}
+
+		return api.ClientCancelRetrievalDeal(ctx, retrievalmarket.DealID(cctx.Int64("dealid")))
 	},
 }
 
