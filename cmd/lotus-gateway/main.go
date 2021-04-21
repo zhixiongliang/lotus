@@ -110,7 +110,7 @@ var runCmd = &cli.Command{
 		ma := metrics.MetricedGatewayAPI(NewGatewayAPI(api))
 
 		serveRpc("/rpc/v1", ma)
-		serveRpc("/rpc/v0", lapi.Wrap(new(v1api.FullNodeStruct), new(v0api.WrapperV1Full), ma))
+		serveRpc("/rpc/v0", lapi.Wrap(new(v1api.GatewayStruct), new(v0api.WrapperV1Gateway), ma))
 
 		registry := promclient.DefaultRegisterer.(*promclient.Registry)
 		exporter, err := prometheus.NewExporter(prometheus.Options{
