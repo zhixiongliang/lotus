@@ -17,17 +17,21 @@ func init() {
 var genTs = mock.TipSet(mock.MkBlock(nil, 0, 0))
 
 type syncOp struct {
-	ts   *types.TipSet
-	done func()
+	ctx   context.Context
+	ts    *types.TipSet
+	force bool
+	done  func()
 }
 
 func runSyncMgrTest(t *testing.T, tname string, thresh int, tf func(*testing.T, *syncManager, chan *syncOp)) {
 	syncTargets := make(chan *syncOp)
-	sm := NewSyncManager(func(ctx context.Context, ts *types.TipSet) error {
+	sm := NewSyncManager(func(ctx context.Context, ts *types.TipSet, force bool) error {
 		ch := make(chan struct{})
 		syncTargets <- &syncOp{
-			ts:   ts,
-			done: func() { close(ch) },
+			ctx:   ctx,
+			ts:    ts,
+			force: force,
+			done:  func() { close(ch) },
 		}
 		<-ch
 		return nil
@@ -238,5 +242,31 @@ func TestSyncManager(t *testing.T) {
 		op3 := <-stc
 		fmt.Println("op3: ", op3.ts.Cids())
 		op3.done()
+	})
+
+	runSyncMgrTest(t, "testSyncForce", 1, func(t *testing.T, sm *syncManager, stc chan *syncOp) {
+		sm.SetPeerHead(ctx, "peer1", a)
+		op1 := <-stc
+		select {
+		case <-op1.ctx.Done():
+			t.Error("did not expect sync to be done")
+		default:
+		}
+
+		sm.ForceHead(ctx, b)
+		op2 := <-stc
+
+		select {
+		case <-op1.ctx.Done():
+		default:
+			t.Error("expected first sync to have been canceled")
+		}
+		op1.done()
+
+		sm.SetPeerHead(ctx, "peer3", c1)
+		assertNoOp(t, stc)
+		op2.done()
+
+		assertGetSyncOp(t, stc, c1)
 	})
 }

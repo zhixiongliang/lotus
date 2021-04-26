@@ -41,7 +41,7 @@ func init() {
 	}
 }
 
-type SyncFunc func(context.Context, *types.TipSet) error
+type SyncFunc func(context.Context, *types.TipSet, bool) error
 
 // SyncManager manages the chain synchronization process, both at bootstrap time
 // and during ongoing operation.
@@ -68,8 +68,9 @@ type syncManager struct {
 	ctx    context.Context
 	cancel func()
 
-	workq   chan peerHead
-	statusq chan workerStatus
+	workq     chan peerHead
+	forceHead chan *types.TipSet
+	statusq   chan workerStatus
 
 	nextWorker uint64
 	pend       syncBucketSet
@@ -85,7 +86,7 @@ type syncManager struct {
 	history  []*workerState
 	historyI int
 
-	doSync func(context.Context, *types.TipSet) error
+	doSync func(context.Context, *types.TipSet, bool) error
 }
 
 var _ SyncManager = (*syncManager)(nil)
@@ -100,6 +101,8 @@ type workerState struct {
 	ts *types.TipSet
 	ss *SyncerState
 	dt time.Duration
+
+	cancel context.CancelFunc
 }
 
 type workerStatus struct {
@@ -114,8 +117,9 @@ func NewSyncManager(sync SyncFunc) SyncManager {
 		ctx:    ctx,
 		cancel: cancel,
 
-		workq:   make(chan peerHead),
-		statusq: make(chan workerStatus),
+		workq:     make(chan peerHead),
+		statusq:   make(chan workerStatus),
+		forceHead: make(chan *types.TipSet),
 
 		heads:   make(map[peer.ID]*types.TipSet),
 		state:   make(map[uint64]*workerState),
@@ -141,6 +145,14 @@ func (sm *syncManager) Stop() {
 func (sm *syncManager) SetPeerHead(ctx context.Context, p peer.ID, ts *types.TipSet) {
 	select {
 	case sm.workq <- peerHead{p: p, ts: ts}:
+	case <-sm.ctx.Done():
+	case <-ctx.Done():
+	}
+}
+
+func (sm *syncManager) ForceHead(ctx context.Context, ts *types.TipSet) {
+	select {
+	case sm.forceHead <- ts:
 	case <-sm.ctx.Done():
 	case <-ctx.Done():
 	}
@@ -179,6 +191,8 @@ func (sm *syncManager) scheduler() {
 		select {
 		case head := <-sm.workq:
 			sm.handlePeerHead(head)
+		case ts := <-sm.forceHead:
+			sm.handleForceHead(ts)
 		case status := <-sm.statusq:
 			sm.handleWorkerStatus(status)
 		case <-tickerC:
@@ -191,6 +205,23 @@ func (sm *syncManager) scheduler() {
 			return
 		}
 	}
+}
+
+// cancelSync cancels all current sync workers.
+func (sm *syncManager) cancelSync() {
+	sm.mx.Lock()
+	state := sm.state
+	sm.state = map[uint64]*workerState{}
+	sm.mx.Unlock()
+
+	for _, worker := range state {
+		worker.cancel()
+	}
+}
+
+func (sm *syncManager) handleForceHead(ts *types.TipSet) {
+	sm.heads = nil // in case we haven't started our initial sync.
+	sm.spawnWorker(ts, true)
 }
 
 func (sm *syncManager) handlePeerHead(head peerHead) {
@@ -216,7 +247,7 @@ func (sm *syncManager) handlePeerHead(head peerHead) {
 		}
 
 		log.Infof("selected initial sync target: %s", target)
-		sm.spawnWorker(target)
+		sm.spawnWorker(target, false)
 		return
 	}
 
@@ -230,7 +261,7 @@ func (sm *syncManager) handlePeerHead(head peerHead) {
 
 	if work {
 		log.Infof("selected sync target: %s", target)
-		sm.spawnWorker(target)
+		sm.spawnWorker(target, false)
 	}
 }
 
@@ -239,6 +270,7 @@ func (sm *syncManager) handleWorkerStatus(status workerStatus) {
 
 	sm.mx.Lock()
 	ws := sm.state[status.id]
+	ws.cancel() // avoid leaking contexts
 	delete(sm.state, status.id)
 
 	// we track the last few workers for debug purposes
@@ -270,7 +302,7 @@ func (sm *syncManager) handleWorkerStatus(status workerStatus) {
 
 	if work {
 		log.Infof("selected sync target: %s", target)
-		sm.spawnWorker(target)
+		sm.spawnWorker(target, false)
 	}
 }
 
@@ -289,34 +321,45 @@ func (sm *syncManager) handleInitialSyncDone() {
 		}
 
 		log.Infof("selected deferred sync target: %s", target)
-		sm.spawnWorker(target)
+		sm.spawnWorker(target, false)
 	}
 }
 
-func (sm *syncManager) spawnWorker(target *types.TipSet) {
+func (sm *syncManager) spawnWorker(target *types.TipSet, force bool) {
 	id := sm.nextWorker
 	sm.nextWorker++
+	ctx, cancel := context.WithCancel(sm.ctx)
 	ws := &workerState{
-		id: id,
-		ts: target,
-		ss: new(SyncerState),
+		id:     id,
+		ts:     target,
+		ss:     new(SyncerState),
+		cancel: cancel,
 	}
 	ws.ss.data.WorkerID = id
+	ws.ss.data.Forced = true
 
 	sm.mx.Lock()
+	if force {
+		// treat this as an "initial" sync so we don't try new sync targets.
+		sm.initialSyncDone = false
+		// cancel all ongoing syncs
+		for _, os := range sm.state {
+			os.cancel()
+		}
+	}
 	sm.state[id] = ws
 	sm.mx.Unlock()
 
-	go sm.worker(ws)
+	go sm.worker(ctx, ws, force)
 }
 
-func (sm *syncManager) worker(ws *workerState) {
+func (sm *syncManager) worker(ctx context.Context, ws *workerState, force bool) {
 	log.Infof("worker %d syncing in %s", ws.id, ws.ts)
 
 	start := build.Clock.Now()
 
-	ctx := context.WithValue(sm.ctx, syncStateKey{}, ws.ss)
-	err := sm.doSync(ctx, ws.ts)
+	ctx = context.WithValue(ctx, syncStateKey{}, ws.ss)
+	err := sm.doSync(ctx, ws.ts, force)
 
 	ws.dt = build.Clock.Since(start)
 	log.Infof("worker %d done; took %s", ws.id, ws.dt)

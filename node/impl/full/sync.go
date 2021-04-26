@@ -86,7 +86,7 @@ func (a *SyncAPI) SyncSubmitBlock(ctx context.Context, blk *types.BlockMsg) erro
 	if err != nil {
 		return xerrors.Errorf("somehow failed to make a tipset out of a single block: %w", err)
 	}
-	if err := a.Syncer.Sync(ctx, ts); err != nil {
+	if err := a.Syncer.Sync(ctx, ts, false); err != nil {
 		return xerrors.Errorf("sync to submitted block failed: %w", err)
 	}
 

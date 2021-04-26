@@ -541,7 +541,7 @@ func (syncer *Syncer) tryLoadFullTipSet(tsk types.TipSetKey) (*store.FullTipSet,
 //
 // Most of the heavy-lifting logic happens in syncer#collectChain. Refer to the
 // godocs on that method for a more detailed view.
-func (syncer *Syncer) Sync(ctx context.Context, maybeHead *types.TipSet) error {
+func (syncer *Syncer) Sync(ctx context.Context, maybeHead *types.TipSet, force bool) error {
 	ctx, span := trace.StartSpan(ctx, "chain.Sync")
 	defer span.End()
 
@@ -554,9 +554,10 @@ func (syncer *Syncer) Sync(ctx context.Context, maybeHead *types.TipSet) error {
 
 	hts := syncer.store.GetHeaviestTipSet()
 
-	if hts.ParentWeight().GreaterThan(maybeHead.ParentWeight()) {
+	if !force && hts.ParentWeight().GreaterThan(maybeHead.ParentWeight()) {
 		return nil
 	}
+
 	if syncer.Genesis.Equals(maybeHead) || hts.Equals(maybeHead) {
 		return nil
 	}
@@ -572,13 +573,36 @@ func (syncer *Syncer) Sync(ctx context.Context, maybeHead *types.TipSet) error {
 
 	// At this point we have accepted and synced to the new `maybeHead`
 	// (`StageSyncComplete`).
-	if err := syncer.store.PutTipSet(ctx, maybeHead); err != nil {
-		span.AddAttributes(trace.StringAttribute("put_error", err.Error()))
-		span.SetStatus(trace.Status{
-			Code:    13,
-			Message: err.Error(),
-		})
-		return xerrors.Errorf("failed to put synced tipset to chainstore: %w", err)
+
+	if force {
+		// force the new head
+		if err := syncer.store.SetHead(maybeHead); err != nil {
+			span.AddAttributes(trace.StringAttribute("put_error", err.Error()))
+			span.SetStatus(trace.Status{
+				Code:    13,
+				Message: err.Error(),
+			})
+			return xerrors.Errorf("failed to set synced tipset as head: %w", err)
+		}
+		// And checkpoint it.
+		if err := syncer.SetCheckpoint(maybeHead.Key()); err != nil {
+			span.AddAttributes(trace.StringAttribute("checkpoint_error", err.Error()))
+			span.SetStatus(trace.Status{
+				Code:    13,
+				Message: err.Error(),
+			})
+			return xerrors.Errorf("failed to checkpoint tipset: %w", err)
+		}
+	} else {
+		// maybe take the new head, if better.
+		if err := syncer.store.PutTipSet(ctx, maybeHead); err != nil {
+			span.AddAttributes(trace.StringAttribute("put_error", err.Error()))
+			span.SetStatus(trace.Status{
+				Code:    13,
+				Message: err.Error(),
+			})
+			return xerrors.Errorf("failed to put synced tipset to chainstore: %w", err)
+		}
 	}
 
 	peers := syncer.receiptTracker.GetPeers(maybeHead)
