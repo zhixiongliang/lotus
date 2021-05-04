@@ -151,6 +151,8 @@ func (p *path) stat(ls LocalStorage) (fsutil.FsStat, error) {
 		}
 	}
 
+	stat.Available = 5124768522240
+
 	return stat, err
 }
 
