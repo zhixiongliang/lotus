@@ -75,9 +75,10 @@ type ChainGen struct {
 
 	w *wallet.LocalWallet
 
-	eppProvs    map[address.Address]WinningPoStProver
-	Miners      []address.Address
-	receivers   []address.Address
+	eppProvs  map[address.Address]WinningPoStProver
+	Miners    []address.Address
+	receivers []address.Address
+	// a SecP address
 	banker      address.Address
 	bankerNonce uint64
 
@@ -110,7 +111,7 @@ var DefaultRemainderAccountActor = genesis.Actor{
 	Meta:    remAccMeta.ActorMeta(),
 }
 
-func NewGeneratorWithSectors(numSectors int) (*ChainGen, error) {
+func NewGeneratorWithSectorsAndUpgradeSchedule(numSectors int, us stmgr.UpgradeSchedule) (*ChainGen, error) {
 	j := journal.NilJournal()
 	// TODO: we really shouldn't modify a global variable here.
 	policy.SetSupportedProofTypes(abi.RegisteredSealProof_StackedDrg2KiBV1)
@@ -244,7 +245,10 @@ func NewGeneratorWithSectors(numSectors int) (*ChainGen, error) {
 		mgen[genesis2.MinerAddress(uint64(i))] = &wppProvider{}
 	}
 
-	sm := stmgr.NewStateManager(cs)
+	sm, err := stmgr.NewStateManagerWithUpgradeSchedule(cs, us)
+	if err != nil {
+		return nil, xerrors.Errorf("initing stmgr: %w", err)
+	}
 
 	miners := []address.Address{maddr1, maddr2}
 
@@ -280,6 +284,14 @@ func NewGeneratorWithSectors(numSectors int) (*ChainGen, error) {
 
 func NewGenerator() (*ChainGen, error) {
 	return NewGeneratorWithSectors(1)
+}
+
+func NewGeneratorWithSectors(numSectors int) (*ChainGen, error) {
+	return NewGeneratorWithSectorsAndUpgradeSchedule(numSectors, stmgr.DefaultUpgradeSchedule())
+}
+
+func NewGeneratorWithUpgradeSchedule(us stmgr.UpgradeSchedule) (*ChainGen, error) {
+	return NewGeneratorWithSectorsAndUpgradeSchedule(1, us)
 }
 
 func (cg *ChainGen) StateManager() *stmgr.StateManager {

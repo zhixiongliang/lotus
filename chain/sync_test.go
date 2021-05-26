@@ -7,6 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/filecoin-project/go-state-types/network"
+
+	"github.com/filecoin-project/lotus/chain/stmgr"
+
 	"github.com/ipfs/go-cid"
 
 	ds "github.com/ipfs/go-datastore"
@@ -101,12 +105,55 @@ func prepSyncTest(t testing.TB, h int) *syncTestUtil {
 		g:  g,
 	}
 
-	tu.addSourceNode(h)
+	tu.addSourceNode(stmgr.DefaultUpgradeSchedule(), h)
+
+	return tu
+}
+
+func prepSyncTestWithV5Height(t testing.TB, h int, v5height abi.ChainEpoch) *syncTestUtil {
+	logging.SetLogLevel("*", "INFO")
+
+	us := stmgr.UpgradeSchedule{{
+		// prepare for upgrade.
+		Network:   network.Version9,
+		Height:    1,
+		Migration: stmgr.UpgradeActorsV2,
+	}, {
+		Network:   network.Version10,
+		Height:    2,
+		Migration: stmgr.UpgradeActorsV3,
+	}, {
+		Network:   network.Version12,
+		Height:    3,
+		Migration: stmgr.UpgradeActorsV4,
+	}, {
+		Network:   network.Version13,
+		Height:    v5height,
+		Migration: stmgr.UpgradeActorsV5,
+	}}
+
+	g, err := gen.NewGeneratorWithUpgradeSchedule(us)
+
+	if err != nil {
+		t.Fatalf("%+v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	tu := &syncTestUtil{
+		t:      t,
+		ctx:    ctx,
+		cancel: cancel,
+
+		mn: mocknet.New(ctx),
+		g:  g,
+	}
+
+	tu.addSourceNode(us, h)
 	//tu.checkHeight("source", source, h)
 
 	// separate logs
 	fmt.Println("\x1b[31m///////////////////////////////////////////////////\x1b[39b")
-
 	return tu
 }
 
@@ -213,7 +260,7 @@ func (tu *syncTestUtil) mineNewBlock(src int, miners []int) {
 	tu.g.CurTipset = mts
 }
 
-func (tu *syncTestUtil) addSourceNode(gen int) {
+func (tu *syncTestUtil) addSourceNode(us stmgr.UpgradeSchedule, gen int) {
 	if tu.genesis != nil {
 		tu.t.Fatal("source node already exists")
 	}
@@ -229,6 +276,7 @@ func (tu *syncTestUtil) addSourceNode(gen int) {
 		node.Test(),
 
 		node.Override(new(modules.Genesis), modules.LoadGenesis(genesis)),
+		node.Override(new(stmgr.UpgradeSchedule), us),
 	)
 	require.NoError(tu.t, err)
 	tu.t.Cleanup(func() { _ = stop(context.Background()) })
@@ -668,11 +716,15 @@ func TestBadNonce(t *testing.T) {
 
 	base := tu.g.CurTipset
 
+	// Get the banker from computed tipset state, not the parent.
+	st, _, err := tu.g.StateManager().TipSetState(context.TODO(), base.TipSet())
+	require.NoError(t, err)
+	ba, err := tu.g.StateManager().LoadActorRaw(context.TODO(), tu.g.Banker(), st)
+	require.NoError(t, err)
+
 	// Produce a message from the banker with a bad nonce
 	makeBadMsg := func() *types.SignedMessage {
 
-		ba, err := tu.nds[0].StateGetActor(context.TODO(), tu.g.Banker(), base.TipSet().Key())
-		require.NoError(t, err)
 		msg := types.Message{
 			To:   tu.g.Banker(),
 			From: tu.g.Banker(),
