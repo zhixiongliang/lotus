@@ -58,16 +58,18 @@ func TraverseDag(
 
 	// this is how we implement GETs
 	linkSystem := cidlink.DefaultLinkSystem()
-	linkSystem.StorageReadOpener = func(_ ipld.LinkContext, lnk ipld.Link) (io.Reader, error) {
-		if cl, isCid := lnk.(cidlink.Link); !isCid {
+	linkSystem.StorageReadOpener = func(lctx ipld.LinkContext, lnk ipld.Link) (io.Reader, error) {
+		cl, isCid := lnk.(cidlink.Link)
+		if !isCid {
 			return nil, fmt.Errorf("unexpected link type %#v", lnk)
-		} else {
-			node, err := ds.Get(context.TODO(), cl.Cid)
-			if err != nil {
-				return nil, err
-			}
-			return bytes.NewBuffer(node.RawData()), nil
 		}
+
+		node, err := ds.Get(lctx.Ctx, cl.Cid)
+		if err != nil {
+			return nil, err
+		}
+
+		return bytes.NewBuffer(node.RawData()), nil
 	}
 
 	// this is how we pull the start node out of the DS
