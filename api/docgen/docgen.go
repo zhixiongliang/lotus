@@ -90,7 +90,7 @@ func init() {
 	addExample(&pid)
 
 	multistoreIDExample := multistore.StoreID(50)
-	textSelExample := textselector.Expression("Links/21/Hash/Links/Hash/42")
+	textSelExample := textselector.Expression("Links/21/Hash/Links/42/Hash")
 
 	addExample(bitfield.NewFromSet([]uint64{5}))
 	addExample(abi.RegisteredSealProof_StackedDrg32GiBV1_1)

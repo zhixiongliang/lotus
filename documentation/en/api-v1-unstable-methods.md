@@ -1385,7 +1385,7 @@ Inputs:
       "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
     },
     "Piece": null,
-    "DatamodelPathSelector": "Links/21/Hash/Links/Hash/42",
+    "DatamodelPathSelector": "Links/21/Hash/Links/42/Hash",
     "Size": 42,
     "LocalStore": 12,
     "Total": "0",
@@ -1440,7 +1440,7 @@ Inputs:
       "/": "bafy2bzacea3wsdh6y3a36tb3skempjoxqpuyompjbmfeyf34fi3uy6uue42v4"
     },
     "Piece": null,
-    "DatamodelPathSelector": "Links/21/Hash/Links/Hash/42",
+    "DatamodelPathSelector": "Links/21/Hash/Links/42/Hash",
     "Size": 42,
     "LocalStore": 12,
     "Total": "0",
