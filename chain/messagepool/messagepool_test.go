@@ -605,7 +605,7 @@ func TestClearAll(t *testing.T) {
 		mustAdd(t, mp, m)
 	}
 
-	mp.Clear(context.Background(), true)
+	mp.Clear(true)
 
 	pending, _ := mp.Pending(context.TODO())
 	if len(pending) > 0 {
@@ -660,7 +660,7 @@ func TestClearNonLocal(t *testing.T) {
 		mustAdd(t, mp, m)
 	}
 
-	mp.Clear(context.Background(), false)
+	mp.Clear(false)
 
 	pending, _ := mp.Pending(context.TODO())
 	if len(pending) != 10 {

@@ -120,7 +120,7 @@ func (a *MpoolAPI) MpoolPending(ctx context.Context, tsk types.TipSetKey) ([]*ty
 }
 
 func (a *MpoolAPI) MpoolClear(ctx context.Context, local bool) error {
-	a.Mpool.Clear(ctx, local)
+	a.Mpool.Clear(local)
 	return nil
 }
 

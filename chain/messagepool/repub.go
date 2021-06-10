@@ -18,7 +18,7 @@ const repubMsgLimit = 30
 
 var RepublishBatchDelay = 100 * time.Millisecond
 
-func (mp *MessagePool) republishPendingMessages(ctx context.Context) error {
+func (mp *MessagePool) republishPendingMessages() error {
 	mp.curTsLk.Lock()
 	ts := mp.curTs
 
@@ -32,18 +32,13 @@ func (mp *MessagePool) republishPendingMessages(ctx context.Context) error {
 	pending := make(map[address.Address]map[uint64]*types.SignedMessage)
 	mp.lk.Lock()
 	mp.republished = nil // clear this to avoid races triggering an early republish
-	mp.forEachLocal(ctx, func(ctx context.Context, actor address.Address) {
-		mset, ok, err := mp.getPendingMset(ctx, actor)
-		if err != nil {
-			log.Debugf("failed to get mset: %w", err)
-			return
-		}
-
+	for actor := range mp.localAddrs {
+		mset, ok := mp.pending[actor]
 		if !ok {
-			return
+			continue
 		}
 		if len(mset.msgs) == 0 {
-			return
+			continue
 		}
 		// we need to copy this while holding the lock to avoid races with concurrent modification
 		pend := make(map[uint64]*types.SignedMessage, len(mset.msgs))
@@ -51,8 +46,7 @@ func (mp *MessagePool) republishPendingMessages(ctx context.Context) error {
 			pend[nonce] = m
 		}
 		pending[actor] = pend
-	})
-
+	}
 	mp.lk.Unlock()
 	mp.curTsLk.Unlock()
 
