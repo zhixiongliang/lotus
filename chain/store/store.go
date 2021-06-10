@@ -12,8 +12,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/filecoin-project/lotus/chain/state"
-
 	"golang.org/x/sync/errgroup"
 
 	"github.com/filecoin-project/go-state-types/crypto"
@@ -1010,33 +1008,17 @@ type BlockMessages struct {
 func (cs *ChainStore) BlockMsgsForTipset(ts *types.TipSet) ([]BlockMessages, error) {
 	applied := make(map[address.Address]uint64)
 
-	cst := cbor.NewCborStore(cs.stateBlockstore)
-	st, err := state.LoadStateTree(cst, ts.Blocks()[0].ParentStateRoot)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to load state tree")
-	}
-
 	selectMsg := func(m *types.Message) (bool, error) {
-		var sender address.Address
-		if ts.Height() >= build.UpgradeHyperdriveHeight {
-			sender, err = st.LookupID(m.From)
-			if err != nil {
-				return false, err
-			}
-		} else {
-			sender = m.From
-		}
-
 		// The first match for a sender is guaranteed to have correct nonce -- the block isn't valid otherwise
-		if _, ok := applied[sender]; !ok {
-			applied[sender] = m.Nonce
+		if _, ok := applied[m.From]; !ok {
+			applied[m.From] = m.Nonce
 		}
 
-		if applied[sender] != m.Nonce {
+		if applied[m.From] != m.Nonce {
 			return false, nil
 		}
 
-		applied[sender]++
+		applied[m.From]++
 
 		return true, nil
 	}
