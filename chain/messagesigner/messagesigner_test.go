@@ -24,8 +24,6 @@ type mockMpool struct {
 	nonces map[address.Address]uint64
 }
 
-var _ MpoolNonceAPI = (*mockMpool)(nil)
-
 func newMockMpool() *mockMpool {
 	return &mockMpool{nonces: make(map[address.Address]uint64)}
 }
@@ -37,7 +35,7 @@ func (mp *mockMpool) setNonce(addr address.Address, nonce uint64) {
 	mp.nonces[addr] = nonce
 }
 
-func (mp *mockMpool) GetNonce(ctx context.Context, addr address.Address) (uint64, error) {
+func (mp *mockMpool) GetNonce(addr address.Address) (uint64, error) {
 	mp.lk.RLock()
 	defer mp.lk.RUnlock()
 

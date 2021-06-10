@@ -201,7 +201,7 @@ func (tma *testMpoolAPI) ChainComputeBaseFee(ctx context.Context, ts *types.TipS
 
 func assertNonce(t *testing.T, mp *MessagePool, addr address.Address, val uint64) {
 	t.Helper()
-	n, err := mp.GetNonce(context.TODO(), addr)
+	n, err := mp.GetNonce(addr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +213,7 @@ func assertNonce(t *testing.T, mp *MessagePool, addr address.Address, val uint64
 
 func mustAdd(t *testing.T, mp *MessagePool, msg *types.SignedMessage) {
 	t.Helper()
-	if err := mp.Add(context.TODO(), msg); err != nil {
+	if err := mp.Add(msg); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -228,7 +228,7 @@ func TestMessagePool(t *testing.T) {
 
 	ds := datastore.NewMapDatastore()
 
-	mp, err := New(context.TODO(), tma, ds, "mptest", nil)
+	mp, err := New(tma, ds, "mptest", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,7 +335,7 @@ func TestMessagePoolMessagesInEachBlock(t *testing.T) {
 
 	ds := datastore.NewMapDatastore()
 
-	mp, err := New(context.TODO(), tma, ds, "mptest", nil)
+	mp, err := New(tma, ds, "mptest", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +361,7 @@ func TestMessagePoolMessagesInEachBlock(t *testing.T) {
 	tma.applyBlock(t, a)
 	tsa := mock.TipSet(a)
 
-	_, _ = mp.Pending(context.TODO())
+	_, _ = mp.Pending()
 
 	selm, _ := mp.SelectMessages(tsa, 1)
 	if len(selm) == 0 {
@@ -384,7 +384,7 @@ func TestRevertMessages(t *testing.T) {
 
 	ds := datastore.NewMapDatastore()
 
-	mp, err := New(context.TODO(), tma, ds, "mptest", nil)
+	mp, err := New(tma, ds, "mptest", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -423,7 +423,7 @@ func TestRevertMessages(t *testing.T) {
 
 	assertNonce(t, mp, sender, 4)
 
-	p, _ := mp.Pending(context.TODO())
+	p, _ := mp.Pending()
 	fmt.Printf("%+v\n", p)
 	if len(p) != 3 {
 		t.Fatal("expected three messages in mempool")
@@ -447,7 +447,7 @@ func TestPruningSimple(t *testing.T) {
 
 	ds := datastore.NewMapDatastore()
 
-	mp, err := New(context.TODO(), tma, ds, "mptest", nil)
+	mp, err := New(tma, ds, "mptest", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -464,14 +464,14 @@ func TestPruningSimple(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		smsg := mock.MkMessage(sender, target, uint64(i), w)
-		if err := mp.Add(context.TODO(), smsg); err != nil {
+		if err := mp.Add(smsg); err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	for i := 10; i < 50; i++ {
 		smsg := mock.MkMessage(sender, target, uint64(i), w)
-		if err := mp.Add(context.TODO(), smsg); err != nil {
+		if err := mp.Add(smsg); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -481,7 +481,7 @@ func TestPruningSimple(t *testing.T) {
 
 	mp.Prune()
 
-	msgs, _ := mp.Pending(context.TODO())
+	msgs, _ := mp.Pending()
 	if len(msgs) != 5 {
 		t.Fatal("expected only 5 messages in pool, got: ", len(msgs))
 	}
@@ -491,7 +491,7 @@ func TestLoadLocal(t *testing.T) {
 	tma := newTestMpoolAPI()
 	ds := datastore.NewMapDatastore()
 
-	mp, err := New(context.TODO(), tma, ds, "mptest", nil)
+	mp, err := New(tma, ds, "mptest", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -523,7 +523,7 @@ func TestLoadLocal(t *testing.T) {
 	msgs := make(map[cid.Cid]struct{})
 	for i := 0; i < 10; i++ {
 		m := makeTestMessage(w1, a1, a2, uint64(i), gasLimit, uint64(i+1))
-		cid, err := mp.Push(context.TODO(), m)
+		cid, err := mp.Push(m)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -534,12 +534,12 @@ func TestLoadLocal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mp, err = New(context.TODO(), tma, ds, "mptest", nil)
+	mp, err = New(tma, ds, "mptest", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	pmsgs, _ := mp.Pending(context.TODO())
+	pmsgs, _ := mp.Pending()
 	if len(msgs) != len(pmsgs) {
 		t.Fatalf("expected %d messages, but got %d", len(msgs), len(pmsgs))
 	}
@@ -563,7 +563,7 @@ func TestClearAll(t *testing.T) {
 	tma := newTestMpoolAPI()
 	ds := datastore.NewMapDatastore()
 
-	mp, err := New(context.TODO(), tma, ds, "mptest", nil)
+	mp, err := New(tma, ds, "mptest", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -594,7 +594,7 @@ func TestClearAll(t *testing.T) {
 	gasLimit := gasguess.Costs[gasguess.CostKey{Code: builtin2.StorageMarketActorCodeID, M: 2}]
 	for i := 0; i < 10; i++ {
 		m := makeTestMessage(w1, a1, a2, uint64(i), gasLimit, uint64(i+1))
-		_, err := mp.Push(context.TODO(), m)
+		_, err := mp.Push(m)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -607,7 +607,7 @@ func TestClearAll(t *testing.T) {
 
 	mp.Clear(true)
 
-	pending, _ := mp.Pending(context.TODO())
+	pending, _ := mp.Pending()
 	if len(pending) > 0 {
 		t.Fatalf("cleared the mpool, but got %d pending messages", len(pending))
 	}
@@ -617,7 +617,7 @@ func TestClearNonLocal(t *testing.T) {
 	tma := newTestMpoolAPI()
 	ds := datastore.NewMapDatastore()
 
-	mp, err := New(context.TODO(), tma, ds, "mptest", nil)
+	mp, err := New(tma, ds, "mptest", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -649,7 +649,7 @@ func TestClearNonLocal(t *testing.T) {
 	gasLimit := gasguess.Costs[gasguess.CostKey{Code: builtin2.StorageMarketActorCodeID, M: 2}]
 	for i := 0; i < 10; i++ {
 		m := makeTestMessage(w1, a1, a2, uint64(i), gasLimit, uint64(i+1))
-		_, err := mp.Push(context.TODO(), m)
+		_, err := mp.Push(m)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -662,7 +662,7 @@ func TestClearNonLocal(t *testing.T) {
 
 	mp.Clear(false)
 
-	pending, _ := mp.Pending(context.TODO())
+	pending, _ := mp.Pending()
 	if len(pending) != 10 {
 		t.Fatalf("expected 10 pending messages, but got %d instead", len(pending))
 	}
@@ -678,7 +678,7 @@ func TestUpdates(t *testing.T) {
 	tma := newTestMpoolAPI()
 	ds := datastore.NewMapDatastore()
 
-	mp, err := New(context.TODO(), tma, ds, "mptest", nil)
+	mp, err := New(tma, ds, "mptest", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -719,7 +719,7 @@ func TestUpdates(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		m := makeTestMessage(w1, a1, a2, uint64(i), gasLimit, uint64(i+1))
-		_, err := mp.Push(context.TODO(), m)
+		_, err := mp.Push(m)
 		if err != nil {
 			t.Fatal(err)
 		}
