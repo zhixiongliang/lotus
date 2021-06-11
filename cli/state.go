@@ -204,6 +204,9 @@ var StateMinerInfo = &cli.Command{
 		}
 
 		fmt.Printf("Proving Period Start:\t%s\n", EpochTime(cd.CurrentEpoch, cd.PeriodStart))
+		fmt.Printf("Deadline Index:\t%d\n", cd.Index)
+		fmt.Printf("Deadline Open:\t%d\n", cd.Open)
+		fmt.Printf("Deadline Close:\t%d\n", cd.Close)
 
 		return nil
 	},
@@ -394,7 +397,7 @@ var StateActiveSectorsCmd = &cli.Command{
 		}
 
 		for _, s := range sectors {
-			fmt.Printf("%d: %s\n", s.SectorNumber, s.SealedCID)
+			fmt.Println(s.SectorNumber, s.Activation, s.Expiration, s.DealWeight, s.VerifiedDealWeight)
 		}
 
 		return nil
