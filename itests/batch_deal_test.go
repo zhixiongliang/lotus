@@ -68,7 +68,7 @@ func TestBatchDealInput(t *testing.T) {
 			blockMiner := kit.ConnectAndStartMining(t, blockTime, miner, client)
 			t.Cleanup(blockMiner.Stop)
 
-			dh := kit.NewDealHarness(t, client, miner)
+			dh := kit.NewDealHarness(t, client, miner, miner)
 			ctx := context.Background()
 
 			err := miner.MarketSetAsk(ctx, big.Zero(), big.Zero(), 200, 128, 32<<30)

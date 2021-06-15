@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -38,6 +39,7 @@ import (
 	"github.com/filecoin-project/lotus/genesis"
 	lotusminer "github.com/filecoin-project/lotus/miner"
 	"github.com/filecoin-project/lotus/node"
+	"github.com/filecoin-project/lotus/node/config"
 	"github.com/filecoin-project/lotus/node/modules"
 	"github.com/filecoin-project/lotus/node/modules/dtypes"
 	testing2 "github.com/filecoin-project/lotus/node/modules/testing"
@@ -54,6 +56,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	MarketsNode TestMiner
+)
+
 func init() {
 	chain.BootstrapPeerThreshold = 1
 	messagepool.HeadChangeCoalesceMinDelay = time.Microsecond
@@ -64,7 +70,140 @@ func init() {
 func CreateTestStorageNode(ctx context.Context, t *testing.T, waddr address.Address, act address.Address, pk crypto.PrivKey, tnd TestFullNode, mn mocknet.Mocknet, opts node.Option) TestMiner {
 	r := repo.NewMemory(nil)
 
+	api.RunningNodeType = api.NodeMiner
+
 	lr, err := r.Lock(repo.StorageMiner)
+	require.NoError(t, err)
+
+	ks, err := lr.KeyStore()
+	require.NoError(t, err)
+
+	c, err := lr.Config()
+	require.NoError(t, err)
+
+	cfg, ok := c.(*config.StorageMiner)
+	if !ok {
+		t.Fatalf("invalid config from repo, got: %T", c)
+	}
+
+	cfg.Subsystems.EnableStorageMarket = false
+
+	err = lr.SetConfig(func(raw interface{}) {
+		rcfg := raw.(*config.StorageMiner)
+		*rcfg = *cfg
+	})
+	require.NoError(t, err)
+
+	kbytes, err := pk.Bytes()
+	require.NoError(t, err)
+
+	err = ks.Put("libp2p-host", types.KeyInfo{
+		Type:       "libp2p-host",
+		PrivateKey: kbytes,
+	})
+	require.NoError(t, err)
+
+	ds, err := lr.Datastore(context.TODO(), "/metadata")
+	require.NoError(t, err)
+	err = ds.Put(datastore.NewKey("miner-address"), act.Bytes())
+	require.NoError(t, err)
+
+	nic := storedcounter.New(ds, datastore.NewKey(modules.StorageCounterDSPrefix))
+	for i := 0; i < GenesisPreseals; i++ {
+		_, err := nic.Next()
+		require.NoError(t, err)
+	}
+	_, err = nic.Next()
+	require.NoError(t, err)
+
+	err = lr.Close()
+	require.NoError(t, err)
+
+	//peerid, err := peer.IDFromPrivateKey(pk)
+	//require.NoError(t, err)
+
+	//enc, err := actors.SerializeParams(&miner2.ChangePeerIDParams{NewID: abi.PeerID(peerid)})
+	//require.NoError(t, err)
+
+	//msg := &types.Message{
+	//To:     act,
+	//From:   waddr,
+	//Method: miner.Methods.ChangePeerID,
+	//Params: enc,
+	//Value:  types.NewInt(0),
+	//}
+
+	//_, err = tnd.MpoolPushMessage(ctx, msg, nil)
+	//require.NoError(t, err)
+
+	// start node
+	var minerapi api.StorageMiner
+
+	mineBlock := make(chan lotusminer.MineReq)
+	stop, err := node.New(ctx,
+		node.StorageMiner(&minerapi),
+		node.Online(),
+		node.Repo(r),
+		node.Test(),
+
+		node.MockHost(mn),
+
+		node.Override(new(v1api.FullNode), tnd),
+		node.Override(new(*lotusminer.Miner), lotusminer.NewTestMiner(mineBlock, act)),
+
+		opts,
+	)
+	if err != nil {
+		t.Fatalf("failed to construct node: %v", err)
+	}
+
+	t.Cleanup(func() { _ = stop(context.Background()) })
+
+	/*// Bootstrap with full node
+	remoteAddrs, err := tnd.NetAddrsListen(Ctx)
+	require.NoError(t, err)
+
+	err = minerapi.NetConnect(Ctx, remoteAddrs)
+	require.NoError(t, err)*/
+	mineOne := func(ctx context.Context, req lotusminer.MineReq) error {
+		select {
+		case mineBlock <- req:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	return TestMiner{StorageMiner: minerapi, MineOne: mineOne, Stop: stop}
+}
+
+func CreateTestMarketNode(ctx context.Context, t *testing.T, waddr address.Address, act address.Address, pk crypto.PrivKey, tnd TestFullNode, mn mocknet.Mocknet, opts node.Option, addr multiaddr.Multiaddr, token string) TestMiner {
+	r := repo.NewMemory(nil)
+
+	lr, err := r.Lock(repo.StorageMiner)
+	require.NoError(t, err)
+
+	c, err := lr.Config()
+	require.NoError(t, err)
+
+	cfg, ok := c.(*config.StorageMiner)
+	if !ok {
+		t.Fatalf("invalid config from repo, got: %T", c)
+	}
+
+	cfg.Subsystems.EnableStorageMarket = true
+
+	cfg.Subsystems.EnableMining = false
+	cfg.Subsystems.EnableSealing = false
+	cfg.Subsystems.EnableSectorStorage = false
+
+	cfg.Subsystems.SectorIndexApiInfo = fmt.Sprintf("%s:%s", token, addr.String())
+	cfg.Subsystems.SealerApiInfo = fmt.Sprintf("%s:%s", token, addr.String())
+
+	err = lr.SetConfig(func(raw interface{}) {
+		rcfg := raw.(*config.StorageMiner)
+		*rcfg = *cfg
+	})
 	require.NoError(t, err)
 
 	ks, err := lr.KeyStore()
@@ -123,6 +262,13 @@ func CreateTestStorageNode(ctx context.Context, t *testing.T, waddr address.Addr
 		node.Test(),
 
 		node.MockHost(mn),
+
+		node.Override(new(sectorstorage.StorageAuth), modules.StorageAuthWithURL(cfg.Subsystems.SectorIndexApiInfo)),
+		node.Override(new(modules.MinerStorageService), modules.ConnectStorageService(cfg.Subsystems.SectorIndexApiInfo)),
+		//node.Override(new(sectorstorage.Unsealer), From(new(modules.MinerStorageService))),
+		//node.Override(new(sectorblocks.SectorBuilder), From(new(modules.MinerStorageService))),
+		node.Override(new(modules.MinerSealingService), modules.ConnectSealingService(cfg.Subsystems.SealerApiInfo)),
+		//node.Override(new(stores.SectorIndex), From(new(modules.MinerSealingService))),
 
 		node.Override(new(v1api.FullNode), tnd),
 		node.Override(new(*lotusminer.Miner), lotusminer.NewTestMiner(mineBlock, act)),
@@ -372,8 +518,17 @@ func mockBuilderOpts(t *testing.T, fullOpts []FullNodeOpts, storage []StorageMin
 
 			psd := presealDirs[i]
 		*/
+
+		token, err := f.FullNode.AuthNew(ctx, api.AllPermissions[:3])
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		ret := storerRpc(t, miners[i])
+		MarketsNode = CreateTestMarketNode(ctx, t, wa, genMiner, pk, f, mn, opts, ret.ListenAddr, string(token))
+
 		if rpc {
-			miners[i] = storerRpc(t, miners[i])
+			miners[i] = storerRpc(t, MarketsNode)
 		}
 	}
 

@@ -32,14 +32,16 @@ type DealHarness struct {
 	t      *testing.T
 	client api.FullNode
 	miner  TestMiner
+	market TestMiner
 }
 
 // NewDealHarness creates a test harness that contains testing utilities for deals.
-func NewDealHarness(t *testing.T, client api.FullNode, miner TestMiner) *DealHarness {
+func NewDealHarness(t *testing.T, client api.FullNode, miner TestMiner, market TestMiner) *DealHarness {
 	return &DealHarness{
 		t:      t,
 		client: client,
 		miner:  miner,
+		market: market,
 	}
 }
 
@@ -118,7 +120,7 @@ loop:
 			break loop
 		}
 
-		mds, err := dh.miner.MarketListIncompleteDeals(ctx)
+		mds, err := dh.market.MarketListIncompleteDeals(ctx)
 		require.NoError(dh.t, err)
 
 		var minerState storagemarket.StorageDealStatus
@@ -276,6 +278,9 @@ func ConnectAndStartMining(t *testing.T, blocktime time.Duration, miner TestMine
 	for _, c := range clients {
 		addrinfo, err := c.NetAddrsListen(ctx)
 		if err != nil {
+			t.Fatal(err)
+		}
+		if err := MarketsNode.NetConnect(ctx, addrinfo); err != nil {
 			t.Fatal(err)
 		}
 		if err := miner.NetConnect(ctx, addrinfo); err != nil {

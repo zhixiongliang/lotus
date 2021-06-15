@@ -205,7 +205,7 @@ func TestGatewayDealFlow(t *testing.T) {
 	// so that the deal starts sealing in time
 	dealStartEpoch := abi.ChainEpoch(2 << 12)
 
-	dh := kit.NewDealHarness(t, nodes.lite, nodes.miner)
+	dh := kit.NewDealHarness(t, nodes.lite, nodes.miner, nodes.miner)
 	dh.MakeFullDeal(ctx, 6, false, false, dealStartEpoch)
 }
 
