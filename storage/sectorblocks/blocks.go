@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 
@@ -101,6 +102,7 @@ func (st *SectorBlocks) writeRef(dealID abi.DealID, sectorID abi.SectorNumber, o
 }
 
 func (st *SectorBlocks) AddPiece(ctx context.Context, size abi.UnpaddedPieceSize, r io.Reader, d api.PieceDealInfo) (abi.SectorNumber, abi.PaddedPieceSize, error) {
+	fmt.Println("=== anton SectorAddPieceToAny")
 	so, err := st.SectorBuilder.SectorAddPieceToAny(ctx, size, r, d)
 	if err != nil {
 		return 0, 0, err

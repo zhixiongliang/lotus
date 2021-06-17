@@ -269,6 +269,7 @@ func CreateTestMarketNode(ctx context.Context, t *testing.T, waddr address.Addre
 		//node.Override(new(sectorblocks.SectorBuilder), From(new(modules.MinerStorageService))),
 		node.Override(new(modules.MinerSealingService), modules.ConnectSealingService(cfg.Subsystems.SealerApiInfo)),
 		//node.Override(new(stores.SectorIndex), From(new(modules.MinerSealingService))),
+		//node.Override(new(*sectorblocks.SectorBlocks), sectorblocks.NewSectorBlocks),
 
 		node.Override(new(v1api.FullNode), tnd),
 		node.Override(new(*lotusminer.Miner), lotusminer.NewTestMiner(mineBlock, act)),
@@ -528,7 +529,8 @@ func mockBuilderOpts(t *testing.T, fullOpts []FullNodeOpts, storage []StorageMin
 		MarketsNode = CreateTestMarketNode(ctx, t, wa, genMiner, pk, f, mn, opts, ret.ListenAddr, string(token))
 
 		if rpc {
-			miners[i] = storerRpc(t, MarketsNode)
+			//miners[i] = storerRpc(t, MarketsNode)
+			miners[i] = storerRpc(t, miners[i])
 		}
 	}
 
@@ -791,7 +793,9 @@ func fullRpc(t *testing.T, nd TestFullNode) TestFullNode {
 	srv, maddr := CreateRPCServer(t, handler)
 
 	var ret TestFullNode
-	cl, stop, err := client.NewFullNodeRPCV1(context.Background(), "ws://"+srv.Listener.Addr().String()+"/rpc/v1", nil)
+	fullNodeAddr := "ws://" + srv.Listener.Addr().String() + "/rpc/v1"
+	fmt.Println("==== anton full node addr: ", fullNodeAddr)
+	cl, stop, err := client.NewFullNodeRPCV1(context.Background(), fullNodeAddr, nil)
 	require.NoError(t, err)
 	t.Cleanup(stop)
 	ret.ListenAddr, ret.FullNode = maddr, cl
@@ -806,7 +810,9 @@ func storerRpc(t *testing.T, nd TestMiner) TestMiner {
 	srv, maddr := CreateRPCServer(t, handler)
 
 	var ret TestMiner
-	cl, stop, err := client.NewStorageMinerRPCV0(context.Background(), "ws://"+srv.Listener.Addr().String()+"/rpc/v0", nil)
+	storerAddr := "http://" + srv.Listener.Addr().String() + "/rpc/v0"
+	fmt.Println("==== anton storer addr: ", storerAddr)
+	cl, stop, err := client.NewStorageMinerRPCV0(context.Background(), storerAddr, nil)
 	require.NoError(t, err)
 	t.Cleanup(stop)
 

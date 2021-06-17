@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/google/uuid"
 	logging "github.com/ipfs/go-log/v2"
 	"golang.org/x/xerrors"
@@ -42,6 +43,7 @@ type ReaderStream struct {
 
 func ReaderParamEncoder(addr string) jsonrpc.Option {
 	return jsonrpc.WithParamEncoder(new(io.Reader), func(value reflect.Value) (reflect.Value, error) {
+		fmt.Println("==== anton encoding params:", addr)
 		r := value.Interface().(io.Reader)
 
 		if r, ok := r.(*sealing.NullReader); ok {
@@ -58,8 +60,13 @@ func ReaderParamEncoder(addr string) jsonrpc.Option {
 		go func() {
 			// TODO: figure out errors here
 
+			time.Sleep(10 * time.Second)
+
+			fmt.Println("==== anton http post", u.String())
 			resp, err := http.Post(u.String(), "application/octet-stream", r)
 			if err != nil {
+				fmt.Println("==== got back:", resp.StatusCode)
+				spew.Dump(resp)
 				log.Errorf("sending reader param: %+v", err)
 				return
 			}
@@ -68,6 +75,7 @@ func ReaderParamEncoder(addr string) jsonrpc.Option {
 
 			if resp.StatusCode != 200 {
 				b, _ := ioutil.ReadAll(resp.Body)
+				spew.Dump(string(b))
 				log.Errorf("sending reader param (%s): non-200 status: %s, msg: '%s'", u.String(), resp.Status, string(b))
 				return
 			}
@@ -101,6 +109,7 @@ func ReaderParamDecoder() (http.HandlerFunc, jsonrpc.ServerOption) {
 	readers := map[uuid.UUID]chan *waitReadCloser{}
 
 	hnd := func(resp http.ResponseWriter, req *http.Request) {
+		fmt.Println("=== anton called hnd")
 		strId := path.Base(req.URL.Path)
 		u, err := uuid.Parse(strId)
 		if err != nil {
@@ -145,6 +154,8 @@ func ReaderParamDecoder() (http.HandlerFunc, jsonrpc.ServerOption) {
 	}
 
 	dec := jsonrpc.WithParamDecoder(new(io.Reader), func(ctx context.Context, b []byte) (reflect.Value, error) {
+		fmt.Println("=== anton ===")
+		spew.Dump(string(b))
 		var rs ReaderStream
 		if err := json.Unmarshal(b, &rs); err != nil {
 			return reflect.Value{}, xerrors.Errorf("unmarshaling reader id: %w", err)
@@ -164,17 +175,24 @@ func ReaderParamDecoder() (http.HandlerFunc, jsonrpc.ServerOption) {
 			return reflect.Value{}, xerrors.Errorf("parsing reader UUDD: %w", err)
 		}
 
+		fmt.Println("=== parsed uuid ===")
+		spew.Dump(u.String())
+
 		readersLk.Lock()
 		ch, found := readers[u]
 		if !found {
+			fmt.Println("=== not found===")
 			ch = make(chan *waitReadCloser)
 			readers[u] = ch
+		} else {
+			fmt.Println("=== found===")
 		}
 		readersLk.Unlock()
 
 		ctx, cancel := context.WithTimeout(ctx, Timeout)
 		defer cancel()
 
+		fmt.Println("=== select ===")
 		select {
 		case wr, ok := <-ch:
 			if !ok {
