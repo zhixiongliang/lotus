@@ -60,7 +60,7 @@ func ReaderParamEncoder(addr string) jsonrpc.Option {
 		go func() {
 			// TODO: figure out errors here
 
-			time.Sleep(10 * time.Second)
+			//time.Sleep(10 * time.Second)
 
 			fmt.Println("==== anton http post", u.String())
 			resp, err := http.Post(u.String(), "application/octet-stream", r)
