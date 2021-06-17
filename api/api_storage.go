@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"net/http"
 	"time"
 
 	"github.com/filecoin-project/lotus/chain/actors/builtin"
@@ -39,6 +40,10 @@ import (
 //  * Generate openrpc blobs
 
 // StorageMiner is a low-level interface to the Filecoin network storage miner node
+type StorageMinerServeRemote interface {
+	ServeRemote(w http.ResponseWriter, r *http.Request)
+}
+
 type StorageMiner interface {
 	Common
 

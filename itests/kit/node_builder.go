@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -86,7 +87,15 @@ func CreateTestStorageNode(ctx context.Context, t *testing.T, waddr address.Addr
 		t.Fatalf("invalid config from repo, got: %T", c)
 	}
 
+	ln, err := net.Listen("tcp", "127.0.0.1:")
+	if err != nil {
+		panic(err)
+	}
+
 	cfg.Subsystems.EnableStorageMarket = false
+	cfg.Common.API.RemoteListenAddress = ln.Addr().String()
+
+	fmt.Println("== anton cfg.Common.API.RemoteListenAddress", cfg.Common.API.RemoteListenAddress)
 
 	err = lr.SetConfig(func(raw interface{}) {
 		rcfg := raw.(*config.StorageMiner)
@@ -174,7 +183,7 @@ func CreateTestStorageNode(ctx context.Context, t *testing.T, waddr address.Addr
 		}
 	}
 
-	return TestMiner{StorageMiner: minerapi, MineOne: mineOne, Stop: stop}
+	return TestMiner{StorageMiner: minerapi, MineOne: mineOne, Stop: stop, ln: ln}
 }
 
 func CreateTestMarketNode(ctx context.Context, t *testing.T, waddr address.Address, act address.Address, pk crypto.PrivKey, tnd TestFullNode, mn mocknet.Mocknet, opts node.Option, addr multiaddr.Multiaddr, token string) TestMiner {
@@ -199,6 +208,10 @@ func CreateTestMarketNode(ctx context.Context, t *testing.T, waddr address.Addre
 
 	cfg.Subsystems.SectorIndexApiInfo = fmt.Sprintf("%s:%s", token, addr.String())
 	cfg.Subsystems.SealerApiInfo = fmt.Sprintf("%s:%s", token, addr.String())
+
+	fmt.Println("===== anton subsystems config")
+	fmt.Println(cfg.Subsystems.SectorIndexApiInfo)
+	fmt.Println(cfg.Subsystems.SealerApiInfo)
 
 	err = lr.SetConfig(func(raw interface{}) {
 		rcfg := raw.(*config.StorageMiner)
@@ -265,11 +278,19 @@ func CreateTestMarketNode(ctx context.Context, t *testing.T, waddr address.Addre
 
 		node.Override(new(sectorstorage.StorageAuth), modules.StorageAuthWithURL(cfg.Subsystems.SectorIndexApiInfo)),
 		node.Override(new(modules.MinerStorageService), modules.ConnectStorageService(cfg.Subsystems.SectorIndexApiInfo)),
-		//node.Override(new(sectorstorage.Unsealer), From(new(modules.MinerStorageService))),
-		//node.Override(new(sectorblocks.SectorBuilder), From(new(modules.MinerStorageService))),
 		node.Override(new(modules.MinerSealingService), modules.ConnectSealingService(cfg.Subsystems.SealerApiInfo)),
-		//node.Override(new(stores.SectorIndex), From(new(modules.MinerSealingService))),
-		//node.Override(new(*sectorblocks.SectorBlocks), sectorblocks.NewSectorBlocks),
+
+		//node.Override(new(*mock.SectorMgr), func() (*mock.SectorMgr, error) {
+		//return mock.NewMockSectorMgr(nil), nil
+		//}),
+		//node.Override(new(sectorstorage.PieceProvider), node.From(new(*mock.SectorMgr))),
+
+		// Markets (retrieval)
+		//node.Override(new(retrievalmarket.RetrievalProviderNode), retrievaladapter.NewRetrievalProviderNode),
+		//node.Override(new(rmnet.RetrievalMarketNetwork), modules.RetrievalNetwork),
+		//node.Override(new(retrievalmarket.RetrievalProvider), modules.RetrievalProvider),
+		//node.Override(new(dtypes.RetrievalDealFilter), modules.RetrievalDealFilter(nil)),
+		//node.Override(HandleRetrievalKey, modules.HandleRetrieval),
 
 		node.Override(new(v1api.FullNode), tnd),
 		node.Override(new(*lotusminer.Miner), lotusminer.NewTestMiner(mineBlock, act)),
@@ -529,7 +550,7 @@ func mockBuilderOpts(t *testing.T, fullOpts []FullNodeOpts, storage []StorageMin
 		MarketsNode = CreateTestMarketNode(ctx, t, wa, genMiner, pk, f, mn, opts, ret.ListenAddr, string(token))
 
 		if rpc {
-			//miners[i] = storerRpc(t, MarketsNode)
+			//_ = storerRpc(t, MarketsNode)
 			miners[i] = storerRpc(t, miners[i])
 		}
 	}
@@ -690,7 +711,7 @@ func mockMinerBuilderOpts(t *testing.T, fullOpts []FullNodeOpts, storage []Stora
 
 			node.Override(new(sectorstorage.SectorManager), node.From(new(*mock.SectorMgr))),
 			node.Override(new(sectorstorage.Unsealer), node.From(new(*mock.SectorMgr))),
-			node.Override(new(sectorstorage.PieceProvider), node.From(new(*mock.SectorMgr))),
+			//node.Override(new(sectorstorage.PieceProvider), node.From(new(*mock.SectorMgr))),
 
 			node.Override(new(ffiwrapper.Verifier), mock.MockVerifier),
 			node.Override(new(ffiwrapper.Prover), mock.MockProver),
@@ -732,17 +753,17 @@ func mockMinerBuilderOpts(t *testing.T, fullOpts []FullNodeOpts, storage []Stora
 			opts = node.Options()
 		}
 		miners[i] = CreateTestStorageNode(ctx, t, genms[i].Worker, maddrs[i], pidKeys[i], f, mn, node.Options(
-			node.Override(new(*mock.SectorMgr), func() (*mock.SectorMgr, error) {
-				return mock.NewMockSectorMgr(sectors), nil
-			}),
+			//node.Override(new(*mock.SectorMgr), func() (*mock.SectorMgr, error) {
+			//return mock.NewMockSectorMgr(sectors), nil
+			//}),
 
-			node.Override(new(sectorstorage.SectorManager), node.From(new(*mock.SectorMgr))),
-			node.Override(new(sectorstorage.Unsealer), node.From(new(*mock.SectorMgr))),
-			node.Override(new(sectorstorage.PieceProvider), node.From(new(*mock.SectorMgr))),
+			//node.Override(new(sectorstorage.SectorManager), node.From(new(*mock.SectorMgr))),
+			//node.Override(new(sectorstorage.Unsealer), node.From(new(*mock.SectorMgr))),
+			//node.Override(new(sectorstorage.PieceProvider), node.From(new(*mock.SectorMgr))),
 
 			node.Override(new(ffiwrapper.Verifier), mock.MockVerifier),
 			node.Override(new(ffiwrapper.Prover), mock.MockProver),
-			node.Unset(new(*sectorstorage.Manager)),
+			//node.Unset(new(*sectorstorage.Manager)),
 			opts,
 		))
 
@@ -775,8 +796,14 @@ func mockMinerBuilderOpts(t *testing.T, fullOpts []FullNodeOpts, storage []Stora
 	return fulls, miners
 }
 
-func CreateRPCServer(t *testing.T, handler http.Handler) (*httptest.Server, multiaddr.Multiaddr) {
-	testServ := httptest.NewServer(handler)
+func CreateRPCServer(t *testing.T, handler http.Handler, ln net.Listener) (*httptest.Server, multiaddr.Multiaddr) {
+	//testServ := httptest.NewServer(handler)
+	testServ := httptest.NewUnstartedServer(handler)
+	if ln != nil {
+		testServ.Listener = ln
+	}
+	testServ.Start()
+
 	t.Cleanup(testServ.Close)
 	t.Cleanup(testServ.CloseClientConnections)
 
@@ -790,7 +817,7 @@ func fullRpc(t *testing.T, nd TestFullNode) TestFullNode {
 	handler, err := node.FullNodeHandler(nd.FullNode, false)
 	require.NoError(t, err)
 
-	srv, maddr := CreateRPCServer(t, handler)
+	srv, maddr := CreateRPCServer(t, handler, nil)
 
 	var ret TestFullNode
 	fullNodeAddr := "ws://" + srv.Listener.Addr().String() + "/rpc/v1"
@@ -807,7 +834,7 @@ func storerRpc(t *testing.T, nd TestMiner) TestMiner {
 	handler, err := node.MinerHandler(nd.StorageMiner, false)
 	require.NoError(t, err)
 
-	srv, maddr := CreateRPCServer(t, handler)
+	srv, maddr := CreateRPCServer(t, handler, nd.ln)
 
 	var ret TestMiner
 	storerAddr := "http://" + srv.Listener.Addr().String() + "/rpc/v0"

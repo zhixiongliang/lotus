@@ -2,6 +2,7 @@ package kit
 
 import (
 	"context"
+	"net"
 	"testing"
 
 	"github.com/multiformats/go-multiaddr"
@@ -29,6 +30,7 @@ type TestFullNode struct {
 }
 
 type TestMiner struct {
+	ln net.Listener
 	lapi.StorageMiner
 	// ListenAddr is the address on which an API server is listening, if an
 	// API server is created for this Node

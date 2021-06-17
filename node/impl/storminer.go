@@ -2,7 +2,6 @@ package impl
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"os"
 	"strconv"
@@ -23,7 +22,6 @@ import (
 	"github.com/filecoin-project/go-fil-markets/piecestore"
 	retrievalmarket "github.com/filecoin-project/go-fil-markets/retrievalmarket"
 	storagemarket "github.com/filecoin-project/go-fil-markets/storagemarket"
-	"github.com/filecoin-project/go-jsonrpc/auth"
 	"github.com/filecoin-project/go-state-types/abi"
 
 	sectorstorage "github.com/filecoin-project/lotus/extern/sector-storage"
@@ -94,11 +92,13 @@ type StorageMinerAPI struct {
 }
 
 func (sm *StorageMinerAPI) ServeRemote(w http.ResponseWriter, r *http.Request) {
-	if !auth.HasPerm(r.Context(), nil, api.PermAdmin) {
-		w.WriteHeader(401)
-		_ = json.NewEncoder(w).Encode(struct{ Error string }{"unauthorized: missing write permission"})
-		return
-	}
+	//if !auth.HasPerm(r.Context(), nil, api.PermAdmin) {
+	//w.WriteHeader(401)
+	//_ = json.NewEncoder(w).Encode(struct{ Error string }{"unauthorized: missing write permission"})
+	//return
+	//}
+
+	//panic("serving http")
 
 	sm.StorageMgr.ServeHTTP(w, r)
 }

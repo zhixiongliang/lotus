@@ -8,9 +8,11 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"sync"
 
 	proof5 "github.com/filecoin-project/specs-actors/v5/actors/runtime/proof"
+	"github.com/gorilla/mux"
 
 	ffiwrapper2 "github.com/filecoin-project/go-commp-utils/ffiwrapper"
 	commcid "github.com/filecoin-project/go-fil-commcid"
@@ -32,11 +34,47 @@ type SectorMgr struct {
 	pieces       map[cid.Cid][]byte
 	nextSectorID abi.SectorNumber
 
+	remoteHnd *mockFetchHandler
+
 	lk sync.Mutex
 }
 
 type mockVerifProver struct {
 	aggregates map[string]proof5.AggregateSealVerifyProofAndInfos // used for logging bad verifies
+}
+
+type mockFetchHandler struct {
+}
+
+func (h *mockFetchHandler) remoteGetSector(w http.ResponseWriter, r *http.Request) {
+	log.Infof("SERVE GET %s", r.URL)
+}
+
+func (h *mockFetchHandler) remoteDeleteSector(w http.ResponseWriter, r *http.Request) {
+	log.Infof("SERVE DELETE %s", r.URL)
+}
+
+func (h *mockFetchHandler) remoteGetAllocated(w http.ResponseWriter, r *http.Request) {
+	log.Infof("SERVE GETALLOCATED %s", r.URL)
+}
+
+func (h *mockFetchHandler) remoteStatFs(w http.ResponseWriter, r *http.Request) {
+	log.Infof("SERVE STATFS %s", r.URL)
+}
+
+func (handler *mockFetchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) { // /remote/
+	mux := mux.NewRouter()
+
+	mux.HandleFunc("/remote/stat/{id}", handler.remoteStatFs).Methods("GET")
+	mux.HandleFunc("/remote/{type}/{id}/{spt}/allocated/{offset}/{size}", handler.remoteGetAllocated).Methods("GET")
+	mux.HandleFunc("/remote/{type}/{id}", handler.remoteGetSector).Methods("GET")
+	mux.HandleFunc("/remote/{type}/{id}", handler.remoteDeleteSector).Methods("DELETE")
+
+	mux.ServeHTTP(w, r)
+}
+
+func (mgr *SectorMgr) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	mgr.remoteHnd.ServeHTTP(w, r)
 }
 
 func NewMockSectorMgr(genesisSectors []abi.SectorID) *SectorMgr {
@@ -50,6 +88,7 @@ func NewMockSectorMgr(genesisSectors []abi.SectorID) *SectorMgr {
 
 	return &SectorMgr{
 		sectors:      sectors,
+		remoteHnd:    &mockFetchHandler{},
 		pieces:       map[cid.Cid][]byte{},
 		nextSectorID: 5,
 	}
