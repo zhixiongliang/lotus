@@ -226,6 +226,7 @@ type Splitstore struct {
 	HotStoreType      string
 	TrackingStoreType string
 	MarkSetType       string
+	HotHeaders        bool
 }
 
 // // Full Node
