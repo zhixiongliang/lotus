@@ -124,7 +124,7 @@ var runCmd = &cli.Command{
 		stop, err := node.New(ctx,
 			node.StorageMiner(&minerapi),
 			node.Override(new(dtypes.ShutdownChan), shutdownChan),
-			node.Online(),
+			node.Base(r),
 			node.Repo(r),
 
 			node.ApplyIf(func(s *node.Settings) bool { return cctx.IsSet("miner-api") },
