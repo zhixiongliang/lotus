@@ -1,7 +1,7 @@
 package splitstore
 
 import (
-	"bytes"
+	//"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -16,7 +16,7 @@ import (
 	cid "github.com/ipfs/go-cid"
 	dstore "github.com/ipfs/go-datastore"
 	logging "github.com/ipfs/go-log/v2"
-	cbg "github.com/whyrusleeping/cbor-gen"
+	//cbg "github.com/whyrusleeping/cbor-gen"
 
 	"github.com/filecoin-project/go-state-types/abi"
 
@@ -111,6 +111,7 @@ type ChainAccessor interface {
 	GetTipsetByHeight(context.Context, abi.ChainEpoch, *types.TipSet, bool) (*types.TipSet, error)
 	GetHeaviestTipSet() *types.TipSet
 	SubscribeHeadChanges(change func(revert []*types.TipSet, apply []*types.TipSet) error)
+	WalkSnapshot(ctx context.Context, ts *types.TipSet, inclRecentRoots abi.ChainEpoch, skipOldMsgs, skipMsgReceipts bool, cb func(cid.Cid) error) error
 }
 
 type SplitStore struct {
@@ -617,10 +618,10 @@ func (s *SplitStore) background() {
 }
 
 func (s *SplitStore) warmup(curTs *types.TipSet) error {
-	err := s.loadGenesisState()
-	if err != nil {
-		return xerrors.Errorf("error loading genesis state: %w", err)
-	}
+	// err := s.loadGenesisState()
+	// if err != nil {
+	// 	return xerrors.Errorf("error loading genesis state: %w", err)
+	// }
 
 	if !atomic.CompareAndSwapInt32(&s.compacting, 0, 1) {
 		return xerrors.Errorf("error locking compaction")
@@ -632,7 +633,7 @@ func (s *SplitStore) warmup(curTs *types.TipSet) error {
 		log.Info("warming up hotstore")
 		start := time.Now()
 
-		err = s.doWarmup(curTs)
+		err := s.doWarmup(curTs)
 		if err != nil {
 			log.Errorf("error warming up hotstore: %s", err)
 			return
@@ -644,64 +645,64 @@ func (s *SplitStore) warmup(curTs *types.TipSet) error {
 	return nil
 }
 
-func (s *SplitStore) loadGenesisState() error {
-	// makes sure the genesis and its state root are hot
-	gb, err := s.chain.GetGenesis()
-	if err != nil {
-		return xerrors.Errorf("error getting genesis: %w", err)
-	}
+// func (s *SplitStore) loadGenesisState() error {
+// 	// makes sure the genesis and its state root are hot
+// 	gb, err := s.chain.GetGenesis()
+// 	if err != nil {
+// 		return xerrors.Errorf("error getting genesis: %w", err)
+// 	}
 
-	genesis := gb.Cid()
-	genesisStateRoot := gb.ParentStateRoot
+// 	genesis := gb.Cid()
+// 	genesisStateRoot := gb.ParentStateRoot
 
-	has, err := s.hot.Has(genesis)
-	if err != nil {
-		return xerrors.Errorf("error checking hotstore for genesis: %w", err)
-	}
+// 	has, err := s.hot.Has(genesis)
+// 	if err != nil {
+// 		return xerrors.Errorf("error checking hotstore for genesis: %w", err)
+// 	}
 
-	if !has {
-		blk, err := gb.ToStorageBlock()
-		if err != nil {
-			return xerrors.Errorf("error converting genesis block to storage block: %w", err)
-		}
+// 	if !has {
+// 		blk, err := gb.ToStorageBlock()
+// 		if err != nil {
+// 			return xerrors.Errorf("error converting genesis block to storage block: %w", err)
+// 		}
 
-		err = s.hot.Put(blk)
-		if err != nil {
-			return xerrors.Errorf("error putting genesis block to hotstore: %w", err)
-		}
-	}
+// 		err = s.hot.Put(blk)
+// 		if err != nil {
+// 			return xerrors.Errorf("error putting genesis block to hotstore: %w", err)
+// 		}
+// 	}
 
-	err = s.walkLinks(genesisStateRoot, cid.NewSet(), func(c cid.Cid) error {
-		has, err = s.hot.Has(c)
-		if err != nil {
-			return xerrors.Errorf("error checking hotstore for genesis state root: %w", err)
-		}
+// 	err = s.walkLinks(genesisStateRoot, cid.NewSet(), func(c cid.Cid) error {
+// 		has, err = s.hot.Has(c)
+// 		if err != nil {
+// 			return xerrors.Errorf("error checking hotstore for genesis state root: %w", err)
+// 		}
 
-		if !has {
-			blk, err := s.cold.Get(c)
-			if err != nil {
-				if err == bstore.ErrNotFound {
-					return nil
-				}
+// 		if !has {
+// 			blk, err := s.cold.Get(c)
+// 			if err != nil {
+// 				if err == bstore.ErrNotFound {
+// 					return nil
+// 				}
 
-				return xerrors.Errorf("error retrieving genesis state linked object from coldstore: %w", err)
-			}
+// 				return xerrors.Errorf("error retrieving genesis state linked object from coldstore: %w", err)
+// 			}
 
-			err = s.hot.Put(blk)
-			if err != nil {
-				return xerrors.Errorf("error putting genesis state linked object to hotstore: %w", err)
-			}
-		}
+// 			err = s.hot.Put(blk)
+// 			if err != nil {
+// 				return xerrors.Errorf("error putting genesis state linked object to hotstore: %w", err)
+// 			}
+// 		}
 
-		return nil
-	})
+// 		return nil
+// 	})
 
-	if err != nil {
-		return xerrors.Errorf("error walking genesis state root links: %w", err)
-	}
+// 	if err != nil {
+// 		return xerrors.Errorf("error walking genesis state root links: %w", err)
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 func (s *SplitStore) doWarmup(curTs *types.TipSet) error {
 	epoch := curTs.Height()
@@ -999,114 +1000,119 @@ func (s *SplitStore) doCompact(curTs *types.TipSet) error {
 
 func (s *SplitStore) walk(ts *types.TipSet, boundary abi.ChainEpoch, inclMsgs, fullChain bool,
 	f func(cid.Cid) error) error {
-	visited := cid.NewSet()
-	walked := cid.NewSet()
-	toWalk := ts.Cids()
-	walkCnt := 0
-	scanCnt := 0
-
-	walkBlock := func(c cid.Cid) error {
-		if !visited.Visit(c) {
-			return nil
-		}
-
-		walkCnt++
-
-		if err := f(c); err != nil {
-			return err
-		}
-
-		blk, err := s.get(c)
-		if err != nil {
-			return xerrors.Errorf("error retrieving block (cid: %s): %w", c, err)
-		}
-
-		var hdr types.BlockHeader
-		if err := hdr.UnmarshalCBOR(bytes.NewBuffer(blk.RawData())); err != nil {
-			return xerrors.Errorf("error unmarshaling block header (cid: %s): %w", c, err)
-		}
-
-		// don't walk under the boundary, unless we are walking the full chain
-		if hdr.Height < boundary && !fullChain {
-			return nil
-		}
-
-		// we only scan the block if it is above the boundary
-		if hdr.Height >= boundary {
-			scanCnt++
-			if inclMsgs {
-				if err := s.walkLinks(hdr.Messages, walked, f); err != nil {
-					return xerrors.Errorf("error walking messages (cid: %s): %w", hdr.Messages, err)
-				}
-
-				if err := s.walkLinks(hdr.ParentMessageReceipts, walked, f); err != nil {
-					return xerrors.Errorf("error walking message receipts (cid: %s): %w", hdr.ParentMessageReceipts, err)
-				}
-			}
-
-			if err := s.walkLinks(hdr.ParentStateRoot, walked, f); err != nil {
-				return xerrors.Errorf("error walking state root (cid: %s): %w", hdr.ParentStateRoot, err)
-			}
-		}
-
-		if hdr.Height > 0 {
-			toWalk = append(toWalk, hdr.Parents...)
-		}
-
-		return nil
-	}
-
-	for len(toWalk) > 0 {
-		walking := toWalk
-		toWalk = nil
-		for _, c := range walking {
-			if err := walkBlock(c); err != nil {
-				return xerrors.Errorf("error walking block (cid: %s): %w", c, err)
-			}
-		}
-	}
-
-	log.Infow("chain walk done", "walked", walkCnt, "scanned", scanCnt)
-
-	return nil
+	return s.chain.WalkSnapshot(context.Background(), ts, ts.Height()-boundary+1, true, true, f)
 }
 
-func (s *SplitStore) walkLinks(c cid.Cid, walked *cid.Set, f func(cid.Cid) error) error {
-	if !walked.Visit(c) {
-		return nil
-	}
+// func (s *SplitStore) walk(ts *types.TipSet, boundary abi.ChainEpoch, inclMsgs, fullChain bool,
+// 	f func(cid.Cid) error) error {
+// 	visited := cid.NewSet()
+// 	walked := cid.NewSet()
+// 	toWalk := ts.Cids()
+// 	walkCnt := 0
+// 	scanCnt := 0
 
-	if err := f(c); err != nil {
-		return err
-	}
+// 	walkBlock := func(c cid.Cid) error {
+// 		if !visited.Visit(c) {
+// 			return nil
+// 		}
 
-	if c.Prefix().Codec != cid.DagCBOR {
-		return nil
-	}
+// 		walkCnt++
 
-	blk, err := s.get(c)
-	if err != nil {
-		return xerrors.Errorf("error retrieving linked block (cid: %s): %w", c, err)
-	}
+// 		if err := f(c); err != nil {
+// 			return err
+// 		}
 
-	var rerr error
-	err = cbg.ScanForLinks(bytes.NewReader(blk.RawData()), func(c cid.Cid) {
-		if rerr != nil {
-			return
-		}
+// 		blk, err := s.get(c)
+// 		if err != nil {
+// 			return xerrors.Errorf("error retrieving block (cid: %s): %w", c, err)
+// 		}
 
-		err := s.walkLinks(c, walked, f)
-		if err != nil {
-			rerr = err
-		}
-	})
+// 		var hdr types.BlockHeader
+// 		if err := hdr.UnmarshalCBOR(bytes.NewBuffer(blk.RawData())); err != nil {
+// 			return xerrors.Errorf("error unmarshaling block header (cid: %s): %w", c, err)
+// 		}
 
-	if err != nil {
-		return xerrors.Errorf("error scanning links (cid: %s): %w", c, err)
-	}
+// 		// don't walk under the boundary, unless we are walking the full chain
+// 		if hdr.Height < boundary && !fullChain {
+// 			return nil
+// 		}
 
-	return rerr
-}
+// 		// we only scan the block if it is above the boundary
+// 		if hdr.Height >= boundary {
+// 			scanCnt++
+// 			if inclMsgs {
+// 				if err := s.walkLinks(hdr.Messages, walked, f); err != nil {
+// 					return xerrors.Errorf("error walking messages (cid: %s): %w", hdr.Messages, err)
+// 				}
+
+// 				if err := s.walkLinks(hdr.ParentMessageReceipts, walked, f); err != nil {
+// 					return xerrors.Errorf("error walking message receipts (cid: %s): %w", hdr.ParentMessageReceipts, err)
+// 				}
+// 			}
+
+// 			if err := s.walkLinks(hdr.ParentStateRoot, walked, f); err != nil {
+// 				return xerrors.Errorf("error walking state root (cid: %s): %w", hdr.ParentStateRoot, err)
+// 			}
+// 		}
+
+// 		if hdr.Height > 0 {
+// 			toWalk = append(toWalk, hdr.Parents...)
+// 		}
+
+// 		return nil
+// 	}
+
+// 	for len(toWalk) > 0 {
+// 		walking := toWalk
+// 		toWalk = nil
+// 		for _, c := range walking {
+// 			if err := walkBlock(c); err != nil {
+// 				return xerrors.Errorf("error walking block (cid: %s): %w", c, err)
+// 			}
+// 		}
+// 	}
+
+// 	log.Infow("chain walk done", "walked", walkCnt, "scanned", scanCnt)
+
+// 	return nil
+// }
+
+// func (s *SplitStore) walkLinks(c cid.Cid, walked *cid.Set, f func(cid.Cid) error) error {
+// 	if !walked.Visit(c) {
+// 		return nil
+// 	}
+
+// 	if err := f(c); err != nil {
+// 		return err
+// 	}
+
+// 	if c.Prefix().Codec != cid.DagCBOR {
+// 		return nil
+// 	}
+
+// 	blk, err := s.get(c)
+// 	if err != nil {
+// 		return xerrors.Errorf("error retrieving linked block (cid: %s): %w", c, err)
+// 	}
+
+// 	var rerr error
+// 	err = cbg.ScanForLinks(bytes.NewReader(blk.RawData()), func(c cid.Cid) {
+// 		if rerr != nil {
+// 			return
+// 		}
+
+// 		err := s.walkLinks(c, walked, f)
+// 		if err != nil {
+// 			rerr = err
+// 		}
+// 	})
+
+// 	if err != nil {
+// 		return xerrors.Errorf("error scanning links (cid: %s): %w", c, err)
+// 	}
+
+// 	return rerr
+// }
 
 // internal version used by walk so that we don't blow the txn
 func (s *SplitStore) get(cid cid.Cid) (blocks.Block, error) {
