@@ -210,9 +210,11 @@ func (n *Ensemble) Miner(miner *TestMiner, full *TestFullNode, opts ...NodeOpt) 
 
 		// create the preseal commitment.
 		if n.options.mockProofs {
-			genm, k, err = mockstorage.PreSeal(abi.RegisteredSealProof_StackedDrg2KiBV1, actorAddr, sectors)
+			//genm, k, err = mockstorage.PreSeal(abi.RegisteredSealProof_StackedDrg2KiBV1, actorAddr, sectors)
+			genm, k, err = mockstorage.PreSeal(abi.RegisteredSealProof_StackedDrg8MiBV1, actorAddr, sectors)
 		} else {
-			genm, k, err = seed.PreSeal(actorAddr, abi.RegisteredSealProof_StackedDrg2KiBV1, 0, sectors, tdir, []byte("make genesis mem random"), nil, true)
+			//genm, k, err = seed.PreSeal(actorAddr, abi.RegisteredSealProof_StackedDrg2KiBV1, 0, sectors, tdir, []byte("make genesis mem random"), nil, true)
+			genm, k, err = seed.PreSeal(actorAddr, abi.RegisteredSealProof_StackedDrg8MiBV1, 0, sectors, tdir, []byte("make genesis mem random"), nil, true)
 		}
 		require.NoError(n.t, err)
 

@@ -14,7 +14,8 @@ func init() {
 	_ = logging.SetLogLevel("*", "INFO")
 
 	policy.SetConsensusMinerMinPower(abi.NewStoragePower(2048))
-	policy.SetSupportedProofTypes(abi.RegisteredSealProof_StackedDrg2KiBV1)
+	//policy.SetSupportedProofTypes(abi.RegisteredSealProof_StackedDrg2KiBV1)
+	policy.SetSupportedProofTypes(abi.RegisteredSealProof_StackedDrg8MiBV1)
 	policy.SetMinVerifiedDealSize(abi.NewStoragePower(256))
 
 	build.InsecurePoStValidation = true
