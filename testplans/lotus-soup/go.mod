@@ -13,7 +13,7 @@ require (
 	github.com/filecoin-project/go-jsonrpc v0.1.4-0.20210217175800-45ea43ac2bec
 	github.com/filecoin-project/go-state-types v0.1.1-0.20210506134452-99b279731c48
 	github.com/filecoin-project/go-storedcounter v0.0.0-20200421200003-1c99c62e8a5b
-	github.com/filecoin-project/lotus v1.10.1-0.20210707122128-1fe08f5973f4
+	github.com/filecoin-project/lotus v1.10.1-0.20210713153425-dd09666399d9
 	github.com/filecoin-project/specs-actors v0.9.14
 	github.com/google/uuid v1.1.2
 	github.com/gorilla/mux v1.7.4
@@ -24,7 +24,7 @@ require (
 	github.com/ipfs/go-graphsync v0.6.2-0.20210428121800-88edb5462e17 // indirect
 	github.com/ipfs/go-ipfs-files v0.0.8
 	github.com/ipfs/go-ipld-format v0.2.0
-	github.com/ipfs/go-log/v2 v2.1.3
+	github.com/ipfs/go-log/v2 v2.3.0
 	github.com/ipfs/go-merkledag v0.3.2
 	github.com/ipfs/go-unixfs v0.2.4
 	github.com/ipld/go-car v0.1.1-0.20201119040415-11b6074b6d4d
