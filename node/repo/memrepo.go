@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/filecoin-project/lotus/api"
 	"github.com/google/uuid"
 	"github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/namespace"
@@ -25,8 +26,9 @@ import (
 type MemRepo struct {
 	api struct {
 		sync.Mutex
-		ma    multiaddr.Multiaddr
-		token []byte
+		ma      multiaddr.Multiaddr
+		token   []byte
+		version api.Version
 	}
 
 	repoLock chan struct{}
@@ -184,6 +186,12 @@ func (mem *MemRepo) APIToken() ([]byte, error) {
 		return nil, ErrNoAPIToken
 	}
 	return mem.api.token, nil
+}
+
+func (mem *MemRepo) Version() (api.Version, error) {
+	mem.api.Lock()
+	defer mem.api.Unlock()
+	return mem.api.version, nil
 }
 
 func (mem *MemRepo) Lock(t RepoType) (LockedRepo, error) {

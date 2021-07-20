@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/filecoin-project/lotus/api"
 	"github.com/ipfs/go-datastore"
 	"github.com/multiformats/go-multiaddr"
 
@@ -29,6 +30,7 @@ const (
 var (
 	ErrNoAPIEndpoint     = errors.New("API not running (no endpoint)")
 	ErrNoAPIToken        = errors.New("API token not set")
+	ErrNoVersion         = errors.New("repo version not set")
 	ErrRepoAlreadyLocked = errors.New("repo is already locked (lotus daemon already running)")
 	ErrClosedRepo        = errors.New("repo is no longer open")
 
@@ -43,6 +45,9 @@ type Repo interface {
 
 	// APIToken returns JWT API Token for use in operations that require auth
 	APIToken() ([]byte, error)
+
+	// Version returns the api.Version the daemon was initialized with
+	Version() (api.Version, error)
 
 	// Lock locks the repo for exclusive use.
 	Lock(RepoType) (LockedRepo, error)

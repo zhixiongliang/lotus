@@ -2,11 +2,33 @@ package api
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	xerrors "golang.org/x/xerrors"
 )
 
 type Version uint32
+
+func VersionFromString(vs string) (Version, error) {
+	tokens := strings.Split(vs, ".")
+	if len(tokens) != 3 {
+		return 0, xerrors.Errorf("invalid version string: %s", vs)
+	}
+	vmj, err := strconv.ParseInt(tokens[0], 10, 8)
+	if err != nil {
+		return 0, err
+	}
+	vmi, err := strconv.ParseInt(tokens[1], 10, 8)
+	if err != nil {
+		return 0, err
+	}
+	vp, err := strconv.ParseInt(tokens[2], 10, 8)
+	if err != nil {
+		return 0, err
+	}
+	return newVer(uint8(vmj), uint8(vmi), uint8(vp)), nil
+}
 
 func newVer(major, minor, patch uint8) Version {
 	return Version(uint32(major)<<16 | uint32(minor)<<8 | uint32(patch))

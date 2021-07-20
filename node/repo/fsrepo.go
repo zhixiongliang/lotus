@@ -13,7 +13,7 @@ import (
 	"sync"
 
 	"github.com/BurntSushi/toml"
-
+	"github.com/filecoin-project/lotus/api"
 	"github.com/ipfs/go-datastore"
 	fslock "github.com/ipfs/go-fs-lock"
 	logging "github.com/ipfs/go-log/v2"
@@ -39,6 +39,7 @@ const (
 	fsDatastore     = "datastore"
 	fsLock          = "repo.lock"
 	fsKeystore      = "keystore"
+	fsVersion       = "version"
 )
 
 type RepoType int
@@ -116,7 +117,7 @@ func (fsr *FsRepo) Init(t RepoType) error {
 		return err
 	}
 	if exist {
-		return nil
+		return fsr.validateVersion()
 	}
 
 	log.Infof("Initializing repo at '%s'", fsr.path)
@@ -130,7 +131,41 @@ func (fsr *FsRepo) Init(t RepoType) error {
 	}
 
 	return fsr.initKeystore()
+}
 
+func (fsr *FsRepo) validateVersion() error {
+	repoVersion, err := fsr.Version()
+	if err != nil {
+		return xerrors.Errorf("version: %w", err)
+	}
+	apiVersion, err := api.VersionForType(api.RunningNodeType)
+	if err != nil {
+		return xerrors.Errorf("version: %w", err)
+	}
+
+	// FIXME unsure if any validation is expected, if it is, here it be.
+	if !apiVersion.EqMajorMinor(repoVersion) {
+		return xerrors.Errorf("repo version %s doesn't match api version %s", repoVersion, apiVersion)
+	}
+	return nil
+}
+
+func (fsr *FsRepo) Version() (api.Version, error) {
+	p := filepath.Join(fsr.path, fsVersion)
+
+	f, err := os.Open(p)
+	if os.IsNotExist(err) {
+		return api.Version(0), ErrNoVersion
+	} else if err != nil {
+		return api.Version(0), err
+	}
+	defer f.Close() //nolint: errcheck
+
+	data, err := ioutil.ReadAll(f)
+	if err != nil {
+		return api.Version(0), xerrors.Errorf("failed to read %q: %w", p, err)
+	}
+	return api.VersionFromString(strings.TrimSpace(string(data)))
 }
 
 func (fsr *FsRepo) initConfig(t RepoType) error {
@@ -158,6 +193,31 @@ func (fsr *FsRepo) initConfig(t RepoType) error {
 
 	if err := c.Close(); err != nil {
 		return xerrors.Errorf("close config: %w", err)
+	}
+
+	version, err := api.VersionForType(api.RunningNodeType)
+	if err != nil {
+		return xerrors.Errorf("version: %w", err)
+	}
+
+	buf := new(bytes.Buffer)
+	_, err = buf.WriteString(version.String())
+	if err != nil {
+		return err
+	}
+
+	v, err := os.Create(filepath.Join(fsr.path, fsVersion))
+	if err != nil {
+		return err
+	}
+
+	_, err = v.Write(buf.Bytes())
+	if err != nil {
+		return xerrors.Errorf("write version: %w", err)
+	}
+
+	if err := v.Close(); err != nil {
+		return xerrors.Errorf("close version: %w", err)
 	}
 	return nil
 }
